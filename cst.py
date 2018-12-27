@@ -16,7 +16,7 @@ class Cst:
 
     def post(self, path, data):
         h = {"Authorization":  "Bearer %s" % self.token}
-        r = requests.post(URL_BASE + path, data=data, headers=h)
+        r = requests.post(URL_BASE + path, json=data, headers=h)
         return r.json()
 
     def get(self, path):
@@ -37,7 +37,7 @@ def get_port_forwards(c):
                 port_forwards[rule['destinationPort']] = possible_forwards[rule['destinationPort']]
     return port_forwards
 
-def add_port_forward(c, port, ip):
+def add_port_forward(c, ip, int_port, ext_port):
     rules = c.get('/network/iptables/rules')
 
     port_forwards = get_port_forwards(c)
@@ -57,7 +57,7 @@ def add_port_forward(c, port, ip):
         "chain": "FORWARD",
         "jump": "ACCEPT",
         "outInterface": "enp3s0.2048",
-        "destinationPort": str(port),
+        "destinationPort": str(int_port),
         "match": "tcp"
     }
 
@@ -72,23 +72,27 @@ def add_port_forward(c, port, ip):
           "inInterface": "enp2s0",
           "protocol": "tcp",
           "chain": "PREROUTING",
-          "destinationIp": "%s:%d" % (ip, port),
+          "destinationIp": "%s:%d" % (ip, int_port),
           "jump": "DNAT",
-          "destinationPort": str(port),
+          "destinationPort": str(ext_port),
         "match": "tcp"
     }
 
-    rules['tables']['nat']['rules'].insert(nindex + 1, newfilterrule)
+    rules['tables']['nat']['rules'].insert(nindex + 1, newnatrule)
 
-
-    return json.dumps(rules)
+    with open('debugout.txt','w') as f:
+        f.write(json.dumps(rules))
+    r = c.post('/network/iptables/rules', rules)
+    return r
 
 
 
 def main():
     username, password = (secrets.un, secrets.pw)
     c = Cst(username, password)
-    print(add_port_forward(c, '10.204.80.142', 2222))
+    #print(json.dumps(add_port_forward(c, '10.204.80.142', 22, 2222)))
+    print(json.dumps(c.get('/network/iptables/rules')))
+    #print(json.dumps(get_port_forwards(c)))
 
 if __name__ == "__main__":
     main()
